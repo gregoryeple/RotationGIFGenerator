@@ -1,7 +1,6 @@
 from PIL import Image, ImageOps, ImageSequence
 from enum import Enum
 import math
-import os
 
 # ENUM
 class RESIZE(Enum):
@@ -21,24 +20,24 @@ class SIZE(Enum):
     ROTATION = "ROTATION"
 
 # CONFIGURATION
-IMAGE_BACKGROUND = None
-IMAGE_MAIN = "main.png"
-IMAGE_ROTATION = ["walk.gif"] # Ex: "orb.png", ["front.png"], ["back.png", "front.png"], ["back_left.png","back_right.png","front_right.png","front_left.png"]
+IMAGE_BACKGROUND = "background.jpg"
+IMAGE_MAIN = "moon.png"
+IMAGE_ROTATION = [["back.gif", "front.gif"]] # Ex: ["orb.png", ["front.png"], ["back.png", "front.png"], ["back_left.png","back_right.png","front_right.png","front_left.png"]]
 IMAGE_OUTPUT = "animation.gif"
 
 SCALE_BACKGROUND = 1.0
-SCALE_MAIN = 0.5
-SCALE_ROTATION = 10.0
+SCALE_MAIN = 0.1
+SCALE_ROTATION = 1.0
 
-ROTATION_HEIGHT = 0.75
-ROTATION_ANGLE = 90
-ROTATION_DURATION = 2.5
-ROTATION_NUMBER = 4
-ROTATION_RADIUS = 0.1
+ROTATION_HEIGHT = 0.35
+ROTATION_ANGLE = 5
+ROTATION_DURATION = 5
+ROTATION_NUMBER = 5
+ROTATION_RADIUS = 0.75
 
-IMAGE_RESIZE = RESIZE.NONE
+IMAGE_RESIZE = RESIZE.COVER
 IMAGE_ALIGNMENT = ALIGN.CENTER
-IMAGE_SIZE = SIZE.BACKGROUND
+IMAGE_SIZE = SIZE.MAIN
 
 FPS = 30
 
@@ -76,13 +75,15 @@ def resize_image(img, scale):
     h = max(1, int(img.height * scale))
     return img.resize((w, h), Image.LANCZOS)
 
-def load_image(path):
+def load_image(path, scale):
     img = Image.open(path)
     frames = []
     durations = []
     try:
         for frame in ImageSequence.Iterator(img):
             frame = ensure_rgba(frame.copy())
+            if scale != 1:
+                frame = frame.resize([int(size * scale) for size in frame.size])
             duration = frame.info.get("duration", img.info.get("duration", 100))
             if duration <= 0:
                 duration = 100
@@ -91,7 +92,7 @@ def load_image(path):
     except EOFError:
         pass
     if not frames:
-        frames = [ensure_rgba(img)]
+        frames = [ensure_rgba(img.resize(*[int(size * scale) for size in img.size]))]
         durations = [100]
     return AnimatedImage(frames, durations)
 
@@ -104,7 +105,7 @@ class RotationSprite:
             definition = [definition]
         self.images = []
         for path in definition:
-            self.images.append(load_image(path))
+            self.images.append(load_image(path, SCALE_ROTATION))
 
     def get_image(self, orbit_angle):
         a = orbit_angle % 360
@@ -126,8 +127,8 @@ class RotationSprite:
         raise ValueError("Rotation image must contain 1, 2 or 4 images.")
 
 # LOAD CONFIGURED IMAGES
-BACKGROUND = (load_image(IMAGE_BACKGROUND) if IMAGE_BACKGROUND else None)
-MAIN = (load_image(IMAGE_MAIN) if IMAGE_MAIN else None)
+BACKGROUND = (load_image(IMAGE_BACKGROUND, SCALE_BACKGROUND) if IMAGE_BACKGROUND else None)
+MAIN = (load_image(IMAGE_MAIN, SCALE_MAIN) if IMAGE_MAIN else None)
 ROTATION = []
 
 for item in IMAGE_ROTATION:
@@ -152,12 +153,12 @@ def apply_background_resize(img, target_size):
 def get_background_frame(time_ms):
     if BACKGROUND is None:
         return None
-    return resize_image(BACKGROUND.frame_at_time(time_ms), SCALE_BACKGROUND)
+    return BACKGROUND.frame_at_time(time_ms)
 
 def get_main_frame(time_ms):
     if MAIN is None:
         return None
-    return resize_image(MAIN.frame_at_time(time_ms), SCALE_MAIN)
+    return MAIN.frame_at_time(time_ms)
 
 # CANVAS SIZE
 def rotation_radius_pixels(base_size):
@@ -257,14 +258,13 @@ def orbit_parameters():
 
 # ROTATION MATH
 def orbit_position(progress, index, count):
-    angle = (progress * 360.0 + index * (360.0 / count) + ROTATION_ANGLE) % 360.0
+    angle = (progress * 360.0 + index * (360.0 / count)) % 360.0
     r = math.radians(angle)
     rx, rz = orbit_parameters()
-    return math.sin(r) * rx, -math.cos(r), angle
+    return math.sin(r) * rx, math.cos(r) * rz * math.sin(math.radians(ROTATION_ANGLE)), -math.cos(r), angle
 
-def project_orbit(cx, cy, x, depth):
-    _, rz = orbit_parameters()
-    return (cx + x), (cy + depth * rz)
+def project_orbit(cx, cy, x, y):
+    return (cx + x), (cy + y)
 
 # DIRECTIONAL SPRITE SELECTION
 def sprite_frame(sprite, angle, time_ms):
@@ -296,9 +296,9 @@ def build_rotation_list(progress, time_ms, main_img):
     render = []
     total = len(ROTATION)
     for i, sprite in enumerate(ROTATION):
-        x, depth, angle = orbit_position(progress, i, total)
+        x, y, depth, angle = orbit_position(progress, i, total)
         img = cached_depth_resize(sprite_frame(sprite, angle, time_ms), depth)
-        px, py = project_orbit(cx, cy, x, depth)
+        px, py = project_orbit(cx, cy, x, y)
         render.append({"depth": depth, "image": img, "x": px, "y": py})
     render.sort(key=lambda e: e["depth"])
     return render
@@ -349,7 +349,7 @@ def generate_animation():
 
 # GIF EXPORT
 def export_gif(frames):
-    if len(frames) == 0:
+    if not frames:
         raise RuntimeError("No frames generated.")
     output = IMAGE_OUTPUT
     if not output.lower().endswith(".gif"):
@@ -359,7 +359,7 @@ def export_gif(frames):
         save_all = True,
         append_images = frames[1:],
         loop = 0,
-        duration = round(1000 / FPS),
+        duration = frame_duration_ms(),
         disposal = 2,
         optimize = True,
     )
@@ -388,9 +388,9 @@ def validate_configuration():
 
 # MAIN
 def main():
-    print("=" * 60)
+    print("=" * 50)
     print("Rotation GIF Generator")
-    print("=" * 60)
+    print("=" * 50)
     validate_configuration()
     print("Rendering animation...")
     frames = generate_animation()
