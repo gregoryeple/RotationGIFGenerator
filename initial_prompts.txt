@@ -1,0 +1,21 @@
+# Initial prompt for creating the program for gif generation:
+Using Python, create a program that will create a gif animation:
+ - The animation will have an optional main image, with an optional background image, and a mandatory list of rotating images with at least 1 image inside. (Any of those images can be a gif)
+ - The animation will have the images of the list of rotating image be rotating arround the main image, starting from the front of the main image, rotating to the back of the main image, and coming back, so like if it was in a 3D space. During the rotation, every rotating images must be evenly spread arround the main image.
+ - The generated gif must last for a full rotation, so it can be loopable.
+ - Each element of the list of rotating image can either be:
+   - The image path or a list of 1 image path
+   - A list of 2 images paths (1 used for when the image is in the back of the main image, and 1 for when it is in the front of the main image)
+   - A list of 4 images paths (Used in order, back left, back right, front right and front left of the main image)
+ - Most of the parameters of the generated gif must be from constants
+  - Main image / Background image / List of rotating image paths (IMAGE_BACKGROUND / IMAGE_MAIN / IMAGE_ROTATION)
+  - Output image path (IMAGE_OUTPUT, default = "animation")
+  - The scale of each image (SCALE_BACKGROUND / SCALE_MAIN / SCALE_ROTATION, default = 1)
+  - The height of the rotation center, from 0 to 1, bottom to top (ROTATION_HEIGHT, default = 0.75)
+  - The angle of the rotation (ROTATION_ANGLE, default = 0)
+  - The duration of a full rotation in second (ROTATION_DURATION, default = 1)
+  - The number of time each image of the list of rotating image must be displayed arround the main image (ROTATION_NUMBER, default = 1)
+  - The radius of the rotation, with a ratio, 0 being no rotation, and 1 going from border to border of the image, can be either a simple value, or an array of 2 values, width radius and depth radius (ROTATION_RADIUS, default = 0.75)
+  - The background resie mode, SCALE to scale it to the main image size while keeping overflow, COVER to scale it to the main image size while croping overflow, FILL to resize it the the main image size while ignoring the original aspect ratio of the background, NONE to keep background as is (IMAGE_RESIZE, default = NONE)
+  - The alignment of the main image, CENTER, TOP, BOTTOM (IMAGE_ALIGNMENT, default = CENTER)
+  - The size of the final exported image, MAIN to fit to the background image size, BACKGROUND to fit to the background image size, ROTATION to fit the full rotation arc (IMAGE_SIZE, default = BACKGROUND)
